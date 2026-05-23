@@ -39,31 +39,59 @@
   <div id="__bundler_loading" style="display:none"></div>
 
   <script>
-  /* Patches aplicados após o bundler montar o DOM */
+  /* Patches do modal — executa antes dos scripts do template */
   (function() {
-    var done = false;
-    var t = setInterval(function() {
-      if (done) { clearInterval(t); return; }
-      var btn = document.getElementById('modal-go-plans');
-      var actions = document.querySelector('.modal-actions');
-      var iframe = document.getElementById('test-iframe');
-      if (!btn || !actions || !iframe) return;
-      done = true;
-      clearInterval(t);
-      /* Remove bolha que bloqueia a tela */
-      var bubble = document.getElementById('modal-plans-bubble');
-      if (bubble) bubble.remove();
-      /* Move botão para o cabeçalho do modal */
-      btn.style.cssText = 'background:var(--laranja);color:#fff;border:none;border-radius:99px;padding:9px 18px;font-weight:800;font-size:13.5px;font-family:var(--ff-display);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;transition:background .2s;';
-      actions.insertBefore(btn, actions.firstChild);
-      /* Pré-carrega iframe 3s depois para o modal abrir rápido */
-      setTimeout(function() {
-        if (!iframe.src || iframe.src === 'about:blank') {
-          iframe.src = 'https://finle-phonic-play.lovable.app/demo';
-        }
-      }, 3000);
-    }, 100);
-    setTimeout(function() { clearInterval(t); }, 20000);
+    var intercepted = false;
+    var _orig = Element.prototype.replaceWith;
+
+    Element.prototype.replaceWith = function() {
+      /* Detecta a troca principal do DOM (html → html) */
+      var isBigSwap = !intercepted && this === document.documentElement;
+      _orig.apply(this, arguments);
+
+      if (isBigSwap) {
+        intercepted = true;
+        Element.prototype.replaceWith = _orig; /* restaura o original */
+
+        /* Registra listener de mensagem ANTES dos scripts do template,
+           assim podemos interceptar o sinal de fim de teste. */
+        window.addEventListener('message', function(e) {
+          var d = e.data;
+          if (!d) return;
+          var isEnd = d === 'goToPlans' || d.type === 'goToPlans' || d.action === 'view-plans';
+          if (!isEnd) return;
+          e.stopImmediatePropagation(); /* impede o handler original de fechar o modal */
+          var btn = document.getElementById('modal-go-plans');
+          if (btn) {
+            btn.style.display = 'inline-flex';
+            btn.style.animation = 'plans-pulse 2s ease-in-out infinite';
+          }
+        });
+
+        /* Aguarda o DOM do template estar pronto para configurar o botão */
+        var t = setInterval(function() {
+          var btn = document.getElementById('modal-go-plans');
+          var actions = document.querySelector('.modal-actions');
+          var iframe = document.getElementById('test-iframe');
+          if (!btn || !actions || !iframe) return;
+          clearInterval(t);
+
+          /* Remove bolha e move botão para o cabeçalho, oculto no início */
+          var bubble = document.getElementById('modal-plans-bubble');
+          if (bubble) bubble.remove();
+          btn.style.cssText = 'display:none;background:var(--laranja);color:#fff;border:none;border-radius:99px;padding:9px 18px;font-weight:800;font-size:13.5px;font-family:var(--ff-display);cursor:pointer;white-space:nowrap;align-items:center;gap:6px;transition:background .2s;';
+          actions.insertBefore(btn, actions.firstChild);
+
+          /* Pré-carrega o iframe 3s após a página carregar */
+          setTimeout(function() {
+            if (!iframe.src || iframe.src === 'about:blank') {
+              iframe.src = 'https://finle-phonic-play.lovable.app/demo';
+            }
+          }, 3000);
+        }, 100);
+        setTimeout(function() { clearInterval(t); }, 20000);
+      }
+    };
   })();
   </script>
 
